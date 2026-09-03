@@ -1,5 +1,11 @@
 # Fuelcast
 
+## Author
+
+Made by Sammy Bradley
+
+## Description
+
 Turn the numbers your fitness tracker already collects into a concrete plan: what to
 eat, how much water to drink, when to do both, and the date you reach your goal weight.
 
