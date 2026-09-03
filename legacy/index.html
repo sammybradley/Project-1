@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Fuelcast — eat to hit your goal</title>
+<meta name="description" content="Turn your wearable's numbers into meals, snacks, water and timing that reach your weight goal.">
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🍽️</text></svg>">
+</head>
+<body>
+
+<!-- ======================================================= SETUP / EDIT -->
+<main id="setup" class="setup" hidden>
+  <form id="setup-form" class="setup-card" novalidate>
+    <header class="setup-head">
+      <h1 class="brand"><span class="brand-mark">◔</span> Fuelcast</h1>
+      <p class="lede">Enter what your tracker already knows about you. Fuelcast turns it into
+        meals, snacks, water and the times to take them, then tells you the date you arrive.</p>
+    </header>
+
+    <fieldset class="fs">
+      <legend>Units</legend>
+      <div class="seg" role="radiogroup" aria-label="Units">
+        <label><input type="radio" name="units" value="imperial" checked><span>lb / ft / oz</span></label>
+        <label><input type="radio" name="units" value="metric"><span>kg / cm / ml</span></label>
+      </div>
+    </fieldset>
+
+    <fieldset class="fs">
+      <legend>You</legend>
+      <div class="row">
+        <label class="field">
+          <span>Sex <small>(for the metabolic formula)</small></span>
+          <select name="sex" required>
+            <option value="female">Female</option>
+            <option value="male">Male</option>
+            <option value="other">Prefer not to say</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Age</span>
+          <input type="number" name="age" min="13" max="100" step="1" value="30" required inputmode="numeric">
+        </label>
+      </div>
+
+      <div class="row" data-units="imperial">
+        <label class="field">
+          <span>Height</span>
+          <div class="inline">
+            <input type="number" name="heightFt" min="3" max="8" step="1" value="5" inputmode="numeric" aria-label="Height, feet">
+            <em>ft</em>
+            <input type="number" name="heightIn" min="0" max="11" step="1" value="8" inputmode="numeric" aria-label="Height, inches">
+            <em>in</em>
+          </div>
+        </label>
+        <label class="field">
+          <span>Current weight <em class="u">lb</em></span>
+          <input type="number" name="weight" min="60" max="700" step="0.1" value="180" required inputmode="decimal">
+        </label>
+      </div>
+
+      <div class="row" data-units="metric" hidden>
+        <label class="field">
+          <span>Height <em class="unit">cm</em></span>
+          <input type="number" name="heightCm" min="120" max="230" step="0.5" value="173" inputmode="decimal">
+        </label>
+        <label class="field">
+          <span>Current weight <em class="u">kg</em></span>
+          <input type="number" name="weightKg" min="30" max="320" step="0.1" value="82" inputmode="decimal">
+        </label>
+      </div>
+
+      <label class="field">
+        <span>Daily life, <strong>not</strong> counting workouts you log</span>
+        <select name="baseActivity" id="base-activity"></select>
+        <small class="hint">Workouts get added on top from what you log, so nothing is counted twice.</small>
+      </label>
+
+      <div class="row">
+        <label class="field"><span>Usually wake at</span><input type="time" name="wakeTime" value="07:00" required></label>
+        <label class="field"><span>Usually asleep by</span><input type="time" name="sleepTime" value="23:00" required></label>
+      </div>
+    </fieldset>
+
+    <fieldset class="fs">
+      <legend>Your goal</legend>
+      <div class="seg seg-3" role="radiogroup" aria-label="Goal type">
+        <label><input type="radio" name="goalType" value="lose" checked><span>Lose fat</span></label>
+        <label><input type="radio" name="goalType" value="maintain"><span>Maintain</span></label>
+        <label><input type="radio" name="goalType" value="gain"><span>Gain</span></label>
+      </div>
+
+      <label class="field" id="target-field">
+        <span>Target weight <em class="u">lb</em></span>
+        <input type="number" name="targetWeight" min="30" max="700" step="0.1" value="165" inputmode="decimal">
+      </label>
+
+      <div class="field" id="pace-field">
+        <span>How fast</span>
+        <div class="pace" id="pace-options"></div>
+        <small class="hint" id="pace-hint"></small>
+      </div>
+
+      <label class="field">
+        <span>Food preference</span>
+        <select name="diet" id="diet-select"></select>
+      </label>
+    </fieldset>
+
+    <p class="err" id="setup-error" role="alert" hidden></p>
+
+    <div class="setup-actions">
+      <button type="submit" class="btn btn-primary btn-lg">Build my plan</button>
+      <button type="button" class="btn btn-ghost" id="setup-cancel" hidden>Cancel</button>
+    </div>
+    <p class="fineprint">Everything stays in this browser. No account, no server, nothing uploaded.</p>
+  </form>
+</main>
+
+<!-- ========================================================== DASHBOARD -->
+<div id="app" hidden>
+  <header class="topbar">
+    <div class="topbar-in">
+      <h1 class="brand"><span class="brand-mark">◔</span> Fuelcast</h1>
+      <div class="topbar-meta">
+        <span id="today-label" class="today-label"></span>
+        <span class="dot">·</span>
+        <span id="reset-countdown" class="countdown" title="Your daily calorie count resets at midnight"></span>
+      </div>
+      <div class="topbar-actions">
+        <button class="btn btn-ghost btn-sm" id="btn-edit">Edit plan</button>
+        <button class="btn btn-ghost btn-sm" id="btn-export">Export</button>
+        <button class="btn btn-ghost btn-sm danger" id="btn-reset">Reset</button>
+      </div>
+    </div>
+  </header>
+
+  <div id="banner" class="banner" hidden></div>
+
+  <main class="wrap">
+    <div class="grid">
+
+      <!-- ------------------------------------------------------- TODAY -->
+      <section class="card span-2" id="card-today" aria-labelledby="h-today">
+        <div class="card-head">
+          <h2 id="h-today">Today</h2>
+          <span class="badge" id="today-source"></span>
+        </div>
+        <div id="today-body"></div>
+      </section>
+
+      <!-- ---------------------------------------------------- FORECAST -->
+      <section class="card" id="card-goal" aria-labelledby="h-goal">
+        <div class="card-head"><h2 id="h-goal">Goal &amp; forecast</h2></div>
+        <div id="goal-body"></div>
+      </section>
+
+      <!-- ---------------------------------------------------- TIMELINE -->
+      <section class="card" id="card-timeline" aria-labelledby="h-timeline">
+        <div class="card-head">
+          <h2 id="h-timeline">Today's timing</h2>
+          <span class="badge" id="timeline-next"></span>
+        </div>
+        <div id="timeline-body"></div>
+      </section>
+
+      <!-- ------------------------------------------------------- MEALS -->
+      <section class="card span-2" id="card-meals" aria-labelledby="h-meals">
+        <div class="card-head">
+          <h2 id="h-meals">What to eat next</h2>
+          <span class="badge" id="meals-target"></span>
+        </div>
+        <div class="controls">
+          <div class="tabs" id="meal-tabs" role="tablist" aria-label="Meal slot">
+            <button class="tab" data-slot="auto" role="tab">Up next</button>
+            <button class="tab" data-slot="breakfast" role="tab">Breakfast</button>
+            <button class="tab" data-slot="lunch" role="tab">Lunch</button>
+            <button class="tab" data-slot="dinner" role="tab">Dinner</button>
+            <button class="tab" data-slot="snack" role="tab">Snacks</button>
+          </div>
+          <div class="controls-right">
+            <select id="meal-diet" aria-label="Food preference"></select>
+            <input type="search" id="meal-search" placeholder="Search meals…" aria-label="Search meals">
+          </div>
+        </div>
+        <div id="meals-body" class="meal-list"></div>
+      </section>
+
+      <!-- --------------------------------------------------------- LOG -->
+      <section class="card span-2" id="card-log" aria-labelledby="h-log">
+        <div class="card-head"><h2 id="h-log">Log</h2></div>
+        <div class="tabs" id="log-tabs" role="tablist" aria-label="What to log">
+          <button class="tab is-on" data-panel="food" role="tab">Food</button>
+          <button class="tab" data-panel="water" role="tab">Water</button>
+          <button class="tab" data-panel="activity" role="tab">Activity</button>
+          <button class="tab" data-panel="weight" role="tab">Weight</button>
+        </div>
+
+        <div class="panel" data-panel="food">
+          <form id="form-food" class="mini-form">
+            <input type="text" name="name" placeholder="What did you eat?" required aria-label="Food name">
+            <input type="number" name="kcal" placeholder="kcal" min="0" max="5000" step="1" required inputmode="numeric" aria-label="Calories">
+            <input type="number" name="protein" placeholder="protein g" min="0" max="400" step="1" inputmode="numeric" aria-label="Protein grams">
+            <button class="btn btn-primary" type="submit">Add</button>
+          </form>
+        </div>
+
+        <div class="panel" data-panel="water" hidden>
+          <div class="quick-row" id="water-chips"></div>
+          <form id="form-water" class="mini-form">
+            <input type="number" name="amount" placeholder="custom amount" min="1" max="4000" step="1" required inputmode="numeric" aria-label="Water amount">
+            <span class="unit-tag" id="water-unit">oz</span>
+            <button class="btn btn-primary" type="submit">Add</button>
+          </form>
+        </div>
+
+        <div class="panel" data-panel="activity" hidden>
+          <form id="form-activity" class="mini-form">
+            <input type="text" name="name" placeholder="Activity (e.g. Strength training)" required aria-label="Activity name" list="activity-names">
+            <datalist id="activity-names"></datalist>
+            <input type="number" name="minutes" placeholder="min" min="1" max="600" step="1" required inputmode="numeric" aria-label="Minutes">
+            <input type="number" name="kcal" placeholder="kcal burned" min="0" max="5000" step="1" inputmode="numeric" aria-label="Calories burned">
+            <button class="btn btn-primary" type="submit">Add</button>
+          </form>
+          <p class="hint">Leave calories blank and Fuelcast estimates them from the activity, your weight and the duration.</p>
+
+          <form id="form-wearable" class="mini-form wearable">
+            <strong class="mini-label">Straight from the tracker</strong>
+            <input type="number" name="activeKcal" placeholder="active kcal today" min="0" max="8000" step="1" inputmode="numeric" aria-label="Active calories from tracker">
+            <input type="number" name="restingKcal" placeholder="resting kcal" min="0" max="5000" step="1" inputmode="numeric" aria-label="Resting calories from tracker">
+            <input type="number" name="steps" placeholder="steps" min="0" max="100000" step="1" inputmode="numeric" aria-label="Steps">
+            <button class="btn" type="submit">Save</button>
+          </form>
+          <p class="hint">Your tracker's active-calorie total already includes your workouts, so Fuelcast uses
+            whichever is larger — the tracker figure or your logged sessions — never both.</p>
+        </div>
+
+        <div class="panel" data-panel="weight" hidden>
+          <form id="form-weight" class="mini-form">
+            <input type="number" name="weight" placeholder="today's weight" min="30" max="700" step="0.1" required inputmode="decimal" aria-label="Today's weight">
+            <span class="unit-tag" id="weight-unit">lb</span>
+            <button class="btn btn-primary" type="submit">Check in</button>
+          </form>
+          <p class="hint">Weighing in updates every target and pushes the forecast date forward or back.</p>
+        </div>
+
+        <div id="log-list"></div>
+      </section>
+
+      <!-- ------------------------------------------------------- COACH -->
+      <section class="card" id="card-coach" aria-labelledby="h-coach">
+        <div class="card-head"><h2 id="h-coach">Move</h2></div>
+        <div id="coach-body"></div>
+      </section>
+
+      <!-- ----------------------------------------------------- HISTORY -->
+      <section class="card span-2" id="card-history" aria-labelledby="h-history">
+        <div class="card-head">
+          <h2 id="h-history">Last 14 days</h2>
+          <span class="badge" id="history-badge"></span>
+        </div>
+        <div id="history-body"></div>
+      </section>
+
+    </div>
+
+    <footer class="foot">
+      <p>Fuelcast is a class project, not medical advice. Formulas: Mifflin-St Jeor RMR ·
+        7,700 kcal per kg of body mass · 0.5-1 %/wk loss and 0.25-0.5 %/wk gain for lean-mass
+        retention · ~33 ml water per kg plus ~600 ml per training hour · 20-40 g protein every 3-4 waking hours.</p>
+    </footer>
+  </main>
+</div>
+
+<script src="js/data.js"></script>
+<script src="js/calc.js"></script>
+<script src="js/store.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
